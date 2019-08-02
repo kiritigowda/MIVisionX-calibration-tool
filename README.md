@@ -2,7 +2,7 @@
 
 # MIVisionX Python Calibration Tool
 
-[MIVisionX](https://gpuopen-professionalcompute-libraries.github.io/MIVisionX/) Inference Calibration Tool using pre-trained `ONNX`/`NNEF`/`Caffe` models to analyze, summarize, and calibrate images.
+[MIVisionX](https://gpuopen-professionalcompute-libraries.github.io/MIVisionX/) Python Calibration Tool using pre-trained ONNX/NNEF/Caffe models to analyze, summarize & calibrate for INT8 on images.
 
 Pre-trained models in [ONNX](https://onnx.ai/), [NNEF](https://www.khronos.org/nnef), & [Caffe](http://caffe.berkeleyvision.org/) formats are supported by MIVisionX. The app first converts the pre-trained models to AMD Neural Net Intermediate Representation (NNIR), once the model has been translated into AMD NNIR (AMD's internal open format), the Optimizer goes through the NNIR and applies various optimizations which would allow the model to be deployed on to target hardware most efficiently. Finally, AMD NNIR is converted into OpenVX C code, which is compiled and wrapped with a python API to run on any targeted hardware.
 
