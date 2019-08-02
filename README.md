@@ -73,7 +73,7 @@ usage: mivisionx_calibration_tool.py   [-h]
                                        [--hierarchy HIERARCHY]
                                        [--add ADD] 
                                        [--multiply MULTIPLY]
-				                       [--fp16 FP16]
+				       [--fp16 FP16]
                                        [--replace REPLACE] 
                                        [--verbose VERBOSE]
                                        [--calibrate CALIBRATE]
@@ -98,7 +98,7 @@ usage: mivisionx_calibration_tool.py   [-h]
   --fp16                quantize model to FP16 		     [optional - default:no]
   --replace             replace/overwrite model              [optional - default:no]
   --verbose             verbose                              [optional - default:no]
-  --calibrate           calibrate for given dataset                              [optional - default:yes]
+  --calibrate           calibrate for given dataset         [optional - default:yes]
 
 
 ```
