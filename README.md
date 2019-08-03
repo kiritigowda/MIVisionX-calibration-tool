@@ -73,7 +73,7 @@ usage: mivisionx_calibration_tool.py   [-h]
                                        [--hierarchy HIERARCHY]
                                        [--add ADD] 
                                        [--multiply MULTIPLY]
-				                       [--fp16 FP16]
+				       [--fp16 FP16]
                                        [--replace REPLACE] 
                                        [--verbose VERBOSE]
 ````
