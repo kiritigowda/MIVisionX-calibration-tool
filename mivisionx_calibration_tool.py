@@ -18,7 +18,6 @@ import numpy as np
 from numpy.ctypeslib import ndpointer
 
 # global variables
-calibrateDataSet = True
 FP16inference = False
 verbosePrint = False
 labelNames = None
@@ -154,7 +153,6 @@ if __name__ == '__main__':
 	parser.add_argument('--fp16',				type=str, default='no',		help='quantize to FP16 			[optional - default:no]')
 	parser.add_argument('--replace',			type=str, default='no',		help='replace/overwrite model   [optional - default:no]')
 	parser.add_argument('--verbose',			type=str, default='no',		help='verbose                   [optional - default:no]')
-	parser.add_argument('--calibrate',			type=str, default='yes',	help='run calibration          [optional - default:yes]')
 	args = parser.parse_args()
 
 	# get arguments
@@ -173,7 +171,6 @@ if __name__ == '__main__':
 	fp16 = args.fp16
 	replaceModel = args.replace
 	verbose = args.verbose
-	calibrate = args.calibrate
 
 	# set verbose print
 	if(verbose != 'no'):
@@ -182,10 +179,6 @@ if __name__ == '__main__':
 	# set fp16 inference turned on/off
 	if(fp16 != 'no'):
 		FP16inference = True
-
-	# set calibration off
-	if(calibrate != 'yes'):
-		calibrateDataSet = False
 
 	# set paths
 	modelCompilerPath = '/opt/rocm/mivisionx/model_compiler/python'
@@ -266,7 +259,7 @@ if __name__ == '__main__':
 			print("\nModel Quantized to FP16\n")
 		# convert to openvx
 		if(os.path.exists(nnirDir)):
-			os.system('(cd '+modelDir+'; python '+modelCompilerPath+'/nnir_to_openvx.py nnir-files openvx-files)')
+			os.system('(cd '+modelDir+'; python '+modelCompilerPath+'/nnir_to_openvx.py --virtual_tensor 0 nnir-files openvx-files)')
 		else:
 			print("ERROR: Converting Pre-Trained model to NNIR Failed")
 			quit()
@@ -314,6 +307,10 @@ if __name__ == '__main__':
 	print('Image File Name,Ground Truth Label,Output Label 1,Output Label 2,Output Label 3,\
     		Output Label 4,Output Label 5,Prob 1,Prob 2,Prob 3,Prob 4,Prob 5')
 	sys.stdout = orig_stdout
+
+	
+	#calibrate - get tensor names and allocate histogram mem
+
 
 	# process images
 	correctTop5 = 0; correctTop1 = 0; wrong = 0; noGroundTruth = 0;
@@ -439,9 +436,7 @@ if __name__ == '__main__':
 			if key == 27: 
 				break
 
-			# Calibration
-			if(calibrateDataSet):
-				print("Calibration in Progess\n")
+			# Calibration - get histogram
 
 
 	print("\nSUCCESS: Images Inferenced with the Model\n")
