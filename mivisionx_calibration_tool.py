@@ -18,7 +18,6 @@ import numpy as np
 from numpy.ctypeslib import ndpointer
 
 # global variables
-calibrateDataSet = True
 FP16inference = False
 verbosePrint = False
 labelNames = None
@@ -37,6 +36,9 @@ class AnnAPI:
 		self.annQueryInference = self.lib.annQueryInference
 		self.annQueryInference.restype = ctypes.c_char_p
 		self.annQueryInference.argtypes = []
+		self.annQueryLocals = self.lib.annQueryLocals
+		self.annQueryLocals.restype = ctypes.c_char_p
+		self.annQueryLocals.argtypes = []
 		self.annCreateInference = self.lib.annCreateInference
 		self.annCreateInference.restype = ctypes.c_void_p
 		self.annCreateInference.argtypes = [ctypes.c_char_p]
@@ -49,6 +51,9 @@ class AnnAPI:
 		self.annCopyFromInferenceOutput = self.lib.annCopyFromInferenceOutput
 		self.annCopyFromInferenceOutput.restype = ctypes.c_int
 		self.annCopyFromInferenceOutput.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_size_t]
+		self.annCopyFromInferenceLocal = self.lib.annCopyFromInferenceLocal
+		self.annCopyFromInferenceLocal.restype = ctypes.c_int
+		self.annCopyFromInferenceLocal.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_size_t]
 		self.annRunInference = self.lib.annRunInference
 		self.annRunInference.restype = ctypes.c_int
 		self.annRunInference.argtypes = [ctypes.c_void_p, ctypes.c_int]
@@ -95,7 +100,39 @@ class annieObjectWrapper():
 		out = np.frombuffer(out_buf, dtype=numpy.float32)
 		# run inference & receive output
 		output = self.runInference(img, out)
+		if not os.path.exists("dumpBuffers"):
+			os.makedirs("dumpBuffers")
+		fid = open('dumpBuffers/output.bin', 'wb+')
+		fid.write(output.tobytes())
+		fid.close()
 		return output
+
+	def getLocalDetails(self, localsDict):
+		for each in filter(None,self.api.annQueryLocals().decode("utf-8").split(';')):
+			types,name,n,c,h,w = each.split(',')
+			if name[0:5] == "conv_":
+				local_size = int(n)*int(c)*int(h)*int(w)*4
+				#print types,name, local_size
+				local_buf = bytearray(local_size)
+				local = np.frombuffer(local_buf, dtype=np.float32)
+				localsDict[name] = local
+	
+	def getLocals(self, img, localsDict):
+		if not os.path.exists("dumpBuffers"):
+			os.makedirs("dumpBuffers")
+		#print localsDict.keys()
+		for each in filter(None,self.api.annQueryLocals().decode("utf-8").split(';')):
+			types,name,n,c,h,w = each.split(',')
+			if name in localsDict:
+				print types,name
+				local_size = int(n)*int(c)*int(h)*int(w)*4
+				local_str = 'handle->local[{}]'.format(types[5:])
+				status = self.api.annCopyFromInferenceLocal(self.hdl, local_str, np.ascontiguousarray(localsDict[name], dtype=np.float32), local_size)
+				#localsDict[name] = np.copy(local)
+				fid = open('dumpBuffers/%s.bin' %name, 'wb+')
+				fid.write(localsDict[name].tobytes())
+				fid.close()
+				print('INFO: annCopyFromInferenceLocal status %d' %(status))
 
 # process classification output function
 def processClassificationOutput(inputImage, modelName, modelOutput):
@@ -154,7 +191,6 @@ if __name__ == '__main__':
 	parser.add_argument('--fp16',				type=str, default='no',		help='quantize to FP16 			[optional - default:no]')
 	parser.add_argument('--replace',			type=str, default='no',		help='replace/overwrite model   [optional - default:no]')
 	parser.add_argument('--verbose',			type=str, default='no',		help='verbose                   [optional - default:no]')
-	parser.add_argument('--calibrate',			type=str, default='yes',	help='run calibration          [optional - default:yes]')
 	args = parser.parse_args()
 
 	# get arguments
@@ -173,7 +209,6 @@ if __name__ == '__main__':
 	fp16 = args.fp16
 	replaceModel = args.replace
 	verbose = args.verbose
-	calibrate = args.calibrate
 
 	# set verbose print
 	if(verbose != 'no'):
@@ -182,10 +217,6 @@ if __name__ == '__main__':
 	# set fp16 inference turned on/off
 	if(fp16 != 'no'):
 		FP16inference = True
-
-	# set calibration off
-	if(calibrate != 'yes'):
-		calibrateDataSet = False
 
 	# set paths
 	modelCompilerPath = '/opt/rocm/mivisionx/model_compiler/python'
@@ -266,7 +297,7 @@ if __name__ == '__main__':
 			print("\nModel Quantized to FP16\n")
 		# convert to openvx
 		if(os.path.exists(nnirDir)):
-			os.system('(cd '+modelDir+'; python '+modelCompilerPath+'/nnir_to_openvx.py nnir-files openvx-files)')
+			os.system('(cd '+modelDir+'; python '+modelCompilerPath+'/nnir_to_openvx.py --virtual_tensor 0 nnir-files openvx-files)')
 		else:
 			print("ERROR: Converting Pre-Trained model to NNIR Failed")
 			quit()
@@ -315,9 +346,20 @@ if __name__ == '__main__':
     		Output Label 4,Output Label 5,Prob 1,Prob 2,Prob 3,Prob 4,Prob 5')
 	sys.stdout = orig_stdout
 
+	#calibrate - create memory for local tensors
+	localsDict = {}
+	start = time.time()
+	classifier.getLocalDetails(localsDict)
+	end = time.time()
+	#for key, value in localsDict.items():
+	#	print key, value.size
+	if(verbosePrint):
+		print '%30s' % 'Allocating memory for locals took ', str((end - start)*1000), 'ms'
+
 	# process images
 	correctTop5 = 0; correctTop1 = 0; wrong = 0; noGroundTruth = 0;
-	for x in range(totalImages):
+	#for x in range(totalImages):
+	for x in range(0,1):
 		imageFileName,grountTruth = imageValidation[x].decode("utf-8").split(' ')
 		groundTruthIndex = int(grountTruth)
 		imageFile = os.path.expanduser(inputImageDir+'/'+imageFileName)
@@ -349,6 +391,12 @@ if __name__ == '__main__':
 			if(verbosePrint):
 				print '%30s' % 'Executed Model in ', str((end - start)*1000), 'ms'
 
+			start = time.time()
+			outputLocals = classifier.getLocals(RGBframe, localsDict)
+			end = time.time()
+			if(verbosePrint):
+				print '%30s' % 'Obtained intermediate tensors for calibration ', str((end - start)*1000), 'ms'
+			
 			# process output and display
 			resultImage, topIndex, topProb = processClassificationOutput(resizedFrame, modelName, output)
 			start = time.time()
@@ -439,9 +487,7 @@ if __name__ == '__main__':
 			if key == 27: 
 				break
 
-			# Calibration
-			if(calibrateDataSet):
-				print("Calibration in Progess\n")
+			#print("Calibration in Progess\n")
 
 
 	print("\nSUCCESS: Images Inferenced with the Model\n")
