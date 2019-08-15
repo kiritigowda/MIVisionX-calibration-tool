@@ -112,27 +112,25 @@ class annieObjectWrapper():
 			types,name,n,c,h,w = each.split(',')
 			if name[0:5] == "conv_":
 				local_size = int(n)*int(c)*int(h)*int(w)*4
-				#print types,name, local_size
 				local_buf = bytearray(local_size)
 				local = np.frombuffer(local_buf, dtype=np.float32)
 				localsDict[name] = local
 	
-	def getLocals(self, img, localsDict):
+	def getLocals(self, img, localsDict, img_num):
 		if not os.path.exists("dumpBuffers"):
 			os.makedirs("dumpBuffers")
-		#print localsDict.keys()
 		for each in filter(None,self.api.annQueryLocals().decode("utf-8").split(';')):
 			types,name,n,c,h,w = each.split(',')
+			if not os.path.exists('dumpBuffers/img_%d' %(img_num)):
+				os.makedirs('dumpBuffers/img_%d' %(img_num))
 			if name in localsDict:
-				print types,name
+				#print types,name
 				local_size = int(n)*int(c)*int(h)*int(w)*4
-				local_str = 'handle->local[{}]'.format(types[5:])
-				status = self.api.annCopyFromInferenceLocal(self.hdl, local_str, np.ascontiguousarray(localsDict[name], dtype=np.float32), local_size)
-				#localsDict[name] = np.copy(local)
-				fid = open('dumpBuffers/%s.bin' %name, 'wb+')
-				fid.write(localsDict[name].tobytes())
-				fid.close()
-				print('INFO: annCopyFromInferenceLocal status %d' %(status))
+				status = self.api.annCopyFromInferenceLocal(self.hdl, name, np.ascontiguousarray(localsDict[name], dtype=np.float32), local_size)
+				#fid = open('dumpBuffers/img_%d/%s.bin' %(img_num,name), 'wb+')
+				#fid.write(localsDict[name].tobytes())
+				#fid.close()
+				#print('INFO: annCopyFromInferenceLocal status %d' %(status))
 
 # process classification output function
 def processClassificationOutput(inputImage, modelName, modelOutput):
@@ -358,8 +356,7 @@ if __name__ == '__main__':
 
 	# process images
 	correctTop5 = 0; correctTop1 = 0; wrong = 0; noGroundTruth = 0;
-	#for x in range(totalImages):
-	for x in range(0,1):
+	for x in range(totalImages):
 		imageFileName,grountTruth = imageValidation[x].decode("utf-8").split(' ')
 		groundTruthIndex = int(grountTruth)
 		imageFile = os.path.expanduser(inputImageDir+'/'+imageFileName)
@@ -392,7 +389,7 @@ if __name__ == '__main__':
 				print '%30s' % 'Executed Model in ', str((end - start)*1000), 'ms'
 
 			start = time.time()
-			outputLocals = classifier.getLocals(RGBframe, localsDict)
+			outputLocals = classifier.getLocals(RGBframe, localsDict, x)
 			end = time.time()
 			if(verbosePrint):
 				print '%30s' % 'Obtained intermediate tensors for calibration ', str((end - start)*1000), 'ms'
