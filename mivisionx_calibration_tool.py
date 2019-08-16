@@ -349,10 +349,10 @@ if __name__ == '__main__':
 	start = time.time()
 	classifier.getLocalDetails(localsDict)
 	end = time.time()
-	#for key, value in localsDict.items():
-	#	print key, value.size
 	if(verbosePrint):
 		print '%30s' % 'Allocating memory for locals took ', str((end - start)*1000), 'ms'
+	
+	#calibrate - get tensor names and allocate histogram mem
 
 	# process images
 	correctTop5 = 0; correctTop1 = 0; wrong = 0; noGroundTruth = 0;
@@ -484,8 +484,10 @@ if __name__ == '__main__':
 			if key == 27: 
 				break
 
-			#print("Calibration in Progess\n")
 
+			print("Calibration in Progess\n")
+
+			# Calibration - get histogram
 
 	print("\nSUCCESS: Images Inferenced with the Model\n")
 	cv2.destroyWindow(windowInput)
