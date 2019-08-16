@@ -100,11 +100,6 @@ class annieObjectWrapper():
 		out = np.frombuffer(out_buf, dtype=numpy.float32)
 		# run inference & receive output
 		output = self.runInference(img, out)
-		if not os.path.exists("dumpBuffers"):
-			os.makedirs("dumpBuffers")
-		fid = open('dumpBuffers/output.bin', 'wb+')
-		fid.write(output.tobytes())
-		fid.close()
 		return output
 
 	def getLocalDetails(self, localsDict):
@@ -483,9 +478,6 @@ if __name__ == '__main__':
 			key = cv2.waitKey(2)
 			if key == 27: 
 				break
-
-
-			print("Calibration in Progess\n")
 
 			# Calibration - get histogram
 
