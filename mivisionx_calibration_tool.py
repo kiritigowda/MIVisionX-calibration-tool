@@ -36,6 +36,9 @@ class AnnAPI:
 		self.annQueryInference = self.lib.annQueryInference
 		self.annQueryInference.restype = ctypes.c_char_p
 		self.annQueryInference.argtypes = []
+		self.annQueryLocals = self.lib.annQueryLocals
+		self.annQueryLocals.restype = ctypes.c_char_p
+		self.annQueryLocals.argtypes = []
 		self.annCreateInference = self.lib.annCreateInference
 		self.annCreateInference.restype = ctypes.c_void_p
 		self.annCreateInference.argtypes = [ctypes.c_char_p]
@@ -48,6 +51,9 @@ class AnnAPI:
 		self.annCopyFromInferenceOutput = self.lib.annCopyFromInferenceOutput
 		self.annCopyFromInferenceOutput.restype = ctypes.c_int
 		self.annCopyFromInferenceOutput.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_size_t]
+		self.annCopyFromInferenceLocal = self.lib.annCopyFromInferenceLocal
+		self.annCopyFromInferenceLocal.restype = ctypes.c_int
+		self.annCopyFromInferenceLocal.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_size_t]
 		self.annRunInference = self.lib.annRunInference
 		self.annRunInference.restype = ctypes.c_int
 		self.annRunInference.argtypes = [ctypes.c_void_p, ctypes.c_int]
@@ -95,6 +101,31 @@ class annieObjectWrapper():
 		# run inference & receive output
 		output = self.runInference(img, out)
 		return output
+
+	def getLocalDetails(self, localsDict):
+		for each in filter(None,self.api.annQueryLocals().decode("utf-8").split(';')):
+			types,name,n,c,h,w = each.split(',')
+			if name[0:5] == "conv_":
+				local_size = int(n)*int(c)*int(h)*int(w)*4
+				local_buf = bytearray(local_size)
+				local = np.frombuffer(local_buf, dtype=np.float32)
+				localsDict[name] = local
+	
+	def getLocals(self, img, localsDict, img_num):
+		if not os.path.exists("dumpBuffers"):
+			os.makedirs("dumpBuffers")
+		for each in filter(None,self.api.annQueryLocals().decode("utf-8").split(';')):
+			types,name,n,c,h,w = each.split(',')
+			if not os.path.exists('dumpBuffers/img_%d' %(img_num)):
+				os.makedirs('dumpBuffers/img_%d' %(img_num))
+			if name in localsDict:
+				#print types,name
+				local_size = int(n)*int(c)*int(h)*int(w)*4
+				status = self.api.annCopyFromInferenceLocal(self.hdl, name, np.ascontiguousarray(localsDict[name], dtype=np.float32), local_size)
+				#fid = open('dumpBuffers/img_%d/%s.bin' %(img_num,name), 'wb+')
+				#fid.write(localsDict[name].tobytes())
+				#fid.close()
+				#print('INFO: annCopyFromInferenceLocal status %d' %(status))
 
 # process classification output function
 def processClassificationOutput(inputImage, modelName, modelOutput):
@@ -308,9 +339,15 @@ if __name__ == '__main__':
     		Output Label 4,Output Label 5,Prob 1,Prob 2,Prob 3,Prob 4,Prob 5')
 	sys.stdout = orig_stdout
 
+	#calibrate - create memory for local tensors
+	localsDict = {}
+	start = time.time()
+	classifier.getLocalDetails(localsDict)
+	end = time.time()
+	if(verbosePrint):
+		print '%30s' % 'Allocating memory for locals took ', str((end - start)*1000), 'ms'
 	
 	#calibrate - get tensor names and allocate histogram mem
-
 
 	# process images
 	correctTop5 = 0; correctTop1 = 0; wrong = 0; noGroundTruth = 0;
@@ -346,6 +383,12 @@ if __name__ == '__main__':
 			if(verbosePrint):
 				print '%30s' % 'Executed Model in ', str((end - start)*1000), 'ms'
 
+			start = time.time()
+			outputLocals = classifier.getLocals(RGBframe, localsDict, x)
+			end = time.time()
+			if(verbosePrint):
+				print '%30s' % 'Obtained intermediate tensors for calibration ', str((end - start)*1000), 'ms'
+			
 			# process output and display
 			resultImage, topIndex, topProb = processClassificationOutput(resizedFrame, modelName, output)
 			start = time.time()
@@ -437,7 +480,6 @@ if __name__ == '__main__':
 				break
 
 			# Calibration - get histogram
-
 
 	print("\nSUCCESS: Images Inferenced with the Model\n")
 	cv2.destroyWindow(windowInput)
